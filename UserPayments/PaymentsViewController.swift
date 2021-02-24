@@ -48,7 +48,7 @@ class PaymentsViewController: UIViewController{
                     if (error == nil) {
                         API.shared.payments { [weak self] (error, payments) in
                             if (error == nil) {
-                                DispatchQueue.main.async { [weak self] in
+                                DispatchQueue.main.async {
                                     self?.view().items = payments
                                 }
                             }else {
@@ -75,7 +75,7 @@ class PaymentsViewController: UIViewController{
     }
     
     private func present(error: Error) {
-        DispatchQueue.main.async { [weak self] in
+        DispatchQueue.main.async {
             let apiError = error as? APIError
             
             let errorMessage: String
@@ -90,7 +90,7 @@ class PaymentsViewController: UIViewController{
                 message: NSLocalizedString(errorMessage, comment: ""), preferredStyle: .alert)
             ac.addAction(UIAlertAction(title: NSLocalizedString("OK", comment: ""), style: .cancel, handler: nil))
             
-            self?.present(ac, animated: true, completion: nil)
+            self.present(ac, animated: true, completion: nil)
         }
     }
 }

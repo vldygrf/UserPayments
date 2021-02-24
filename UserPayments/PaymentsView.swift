@@ -13,8 +13,8 @@ class PaymentsView: UIView, UITableViewDataSource {
     private let cellIdent = "paymentCell"
     var items: Array<Dictionary<String, Any>>? {
         didSet {
-            DispatchQueue.main.async { [weak self] in
-                self?.tableView.reloadData()
+            DispatchQueue.main.async {
+                self.tableView.reloadData()
             }
         }
     }
