@@ -4,6 +4,7 @@
 //
 //  Created by Vladislav Garifulin on 24.02.2021.
 //
+//  login=demo, password=12345
 
 import Foundation
 
@@ -11,7 +12,7 @@ enum APIError: Error {
     case httpQueryError(code: Int, message: String)
 }
 
-class API {
+final class API {
     static let shared = API()
     private var token: String?
     private let baseURL = URL(string: "http://82.202.204.94/api/")
@@ -23,93 +24,105 @@ class API {
         }
     }
     
-    private func getAnswer(data: Data?, response: URLResponse?) -> (error: Dictionary<String, Any>?, response: AnyObject?)? {
-        if let httpResponse = response as? HTTPURLResponse {
-            if (httpResponse.statusCode == 200) {
-                if (data != nil) {
-                    if let json: [String: AnyObject] = try? JSONSerialization.jsonObject(with: data!, options: .mutableContainers) as? [String: AnyObject] {
-                        if let success = json["success"] as? String, success == "true" {
-                            return (nil, json["response"])
-                        }else {
-                            return (json["error"] as? [String : Any], nil)
-                        }
-                    }
-                }
-            }
+    private func getAnswer(data: Data?, response: URLResponse?) -> (error: APIError?, response: AnyObject?) {
+        if let response = response {
+            print(response)
         }
         
-        return nil
+        guard let data = data else {
+            return (APIError.httpQueryError(code: 0, message: "the data is empty"), nil)
+        }
+        
+        guard let json = try? JSONSerialization.jsonObject(with: data, options: []) as? [String: AnyObject] else {
+            return (APIError.httpQueryError(code: 0, message: "JSONSerialization error"), nil)
+        }
+        
+        if let error = json["error"] as? [String : Any], let code = error["error_code"] as? Int, let msg = error["error_msg"] as? String {
+            return (APIError.httpQueryError(code: code, message: msg), nil)
+        }
+        
+        if let success = json["success"] as? String, success == "true" {
+            return (nil, json["response"])
+        }
+    
+        return (APIError.httpQueryError(code: 0, message: "response parsing error"), nil)
     }
         
     func connect(login: String, password: String, completion: @escaping (_ error: Error?) -> Void) {
-        var request = URLRequest(url: URL(string: "login", relativeTo: baseURL)!)
+        disconnect()
+        
+        guard let url = URL(string: "login", relativeTo: baseURL) else {
+            return
+        }
+        
+        var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.httpBody = "login=\(login)&password=\(password)".data(using: String.Encoding.utf8)
         prepare(request: &request)
         
-        let task = URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
+        URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
             guard let self = self else {
                 return
             }
             
-            if (error == nil) {
-                var errorBack: Dictionary<String, Any>?
-                
-                if let answer = self.getAnswer(data: data, response: response) {
-                    if (answer.error == nil) {
-                        self.token = answer.response?["token"] as? String
-                    }else {
-                        errorBack = answer.error
-                    }
-                }
-                
-                if (self.token != nil) {
-                    completion(nil)
-                }else {
-                    if let eb = errorBack, let code = eb["error_code"] as? Int, let msg = eb["error_msg"] as? String {
-                        completion(APIError.httpQueryError(code: code, message: msg))
-                    }else {
-                        completion(APIError.httpQueryError(code: 0, message: "the token is not received"))
-                    }
-                }
-            }else {
+            guard error == nil else {
                 completion(error)
+                return
             }
-        }
-        
-        task.resume()
+            
+            let answer = self.getAnswer(data: data, response: response)
+            if let error = answer.error {
+                completion(error)
+                return
+            }
+            
+            if let token = answer.response?["token"] as? String {
+                self.token = token
+                completion(nil)
+            } else {
+                completion(APIError.httpQueryError(code: 0, message: "the token is not received"))
+            }
+        }.resume()
     }
     
     func payments(completion: @escaping (_ error: Error?,_ payments: Array<Dictionary<String, Any>>?) -> Void) {
-        guard (token != nil) else {
-            completion(APIError.httpQueryError(code: 0, message: "the token is not received"), nil)
+        guard let token = token else {
             return
         }
-        var request = URLRequest(url: URL(string: "payments?token=\(self.token!)", relativeTo: baseURL)!)
+        
+        guard let url = URL(string: "payments?token=\(token)", relativeTo: baseURL) else {
+            return
+        }
+        
+        var request = URLRequest(url: url)
         request.httpMethod = "GET"
         prepare(request: &request)
         
-        let task = URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
+        URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
             guard let self = self else {
                 return
             }
             
-            if let answer = self.getAnswer(data: data, response: response) {
-                if (error == nil) {
-                    if let payments: Array<Dictionary<String, Any>> = answer.response as? Array<Dictionary<String, Any>> {
-                        completion(nil, payments)
-                    }else {
-                        completion(APIError.httpQueryError(code: 0, message: "the payments are not received"), nil)
-                    }
-                }else {
-                    completion(error, nil)
-                }
+            guard error == nil else {
+                completion(error, nil)
+                return
             }
-        }
-        task.resume()
+            
+            let answer = self.getAnswer(data: data, response: response)
+            if let error = answer.error {
+                completion(error, nil)
+                return
+            }
+            
+            if let payments = answer.response as? Array<Dictionary<String, Any>> {
+                completion(nil, payments)
+            } else {
+                completion(APIError.httpQueryError(code: 0, message: "the payments are not received"), nil)
+            }
+        }.resume()
     }
     
-    func logout() {
+    func disconnect() {
         token = nil
     }
 }

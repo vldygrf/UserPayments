@@ -30,12 +30,13 @@ class PaymentsViewController: UIViewController{
         login(sender: self)
     }
     
-    @objc func logout(sender: UIBarButtonItem) {
-        API.shared.logout()
+    @objc func logout(sender: AnyObject) {
+        API.shared.disconnect()
         view().items = nil
     }
     
     @objc func login(sender: AnyObject) {
+        logout(sender: self)
         let ac = UIAlertController(title: NSLocalizedString("Login", comment: ""), message: nil, preferredStyle: .alert)
         ac.addAction(UIAlertAction(title: NSLocalizedString("Cancel", comment: ""), style: .cancel, handler: nil))
         ac.addAction(UIAlertAction(title: NSLocalizedString("OK", comment: ""), style: .default, handler: { (action) in
@@ -51,11 +52,11 @@ class PaymentsViewController: UIViewController{
                                 DispatchQueue.main.async {
                                     self?.view().items = payments
                                 }
-                            }else {
+                            } else {
                                 self?.present(error: error!)
                             }
                         }
-                    }else {
+                    } else {
                         self.present(error: error!)
                     }
                 }
